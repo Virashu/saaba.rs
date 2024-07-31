@@ -1,4 +1,5 @@
 use super::{HTTPMethod, Request, Response};
+use log::debug;
 use regex::Regex;
 use std::collections::HashMap;
 use std::{
@@ -33,10 +34,12 @@ impl App {
         }
     }
 
-    pub fn route<H: Sized>(&mut self, method: H, path: &str, callback: HandlerFunction)
-    where
-        H: Into<HTTPMethod>,
-    {
+    pub fn route<HTTPMethodLike: Into<HTTPMethod>>(
+        &mut self,
+        method: HTTPMethodLike,
+        path: &str,
+        callback: HandlerFunction,
+    ) {
         self.handlers
             .insert((method.into(), path.to_owned()), callback);
     }
@@ -68,7 +71,7 @@ impl App {
             .take_while(|line| !line.is_empty())
             .collect();
 
-        println!("Request: {http_request:#?}");
+        // debug!("Request: {http_request:#?}");
 
         if http_request.len() == 0 {
             return;
@@ -82,10 +85,12 @@ impl App {
         let headers = parse_headers(http_request[1..].to_vec());
 
         let request = Request {
-            headers,
-            path: path.clone(),
             method: method.clone(),
+            path: path.clone(),
+            headers,
         };
+
+        debug!("Request: {request:#?}");
 
         let handler_option: Option<&HandlerFunction> = self.handlers.get(&(method, path));
 

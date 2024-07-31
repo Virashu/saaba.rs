@@ -49,7 +49,7 @@ impl Response {
     pub fn from_content_bytevec(content: Vec<u8>) -> Self {
         Response {
             status: 200,
-            headers: HashMap::from([("Content-Length".into(), content.to_vec().len().to_string())]),
+            headers: HashMap::from([("Content-Length".into(), content.len().to_string())]),
             content,
         }
     }
@@ -64,9 +64,15 @@ impl Response {
         }
     }
 
+    pub fn html<StringLike: Into<String>>(content: StringLike) -> Self {
+        let mut res = Response::from_content_string(content.into());
+        res.set_header("Content-Type", "text/html");
+        res
+    }
+
     pub fn set_content(&mut self, content: Vec<u8>) {
         self.headers
-            .insert("Content-Length".into(), content.to_vec().len().to_string());
+            .insert("Content-Length".into(), content.len().to_string());
         self.content = content;
     }
 
@@ -74,7 +80,7 @@ impl Response {
         self.status = status;
     }
 
-    pub fn set_header(&mut self, key: String, value: String) {
+    pub fn set_header<StringLike: Into<String>>(&mut self, key: StringLike, value: StringLike) {
         self.headers.insert(key.into(), value.into());
     }
 
