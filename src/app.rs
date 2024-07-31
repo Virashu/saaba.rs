@@ -1,18 +1,29 @@
-use crate::response;
-
 use super::{HTTPMethod, Request, Response};
+use regex::Regex;
 use std::collections::HashMap;
 use std::{
-    fs,
     io::{prelude::*, BufReader},
     net::{TcpListener, TcpStream},
 };
 
+// type ResponseValue = impl Into<Response>;
+
 type HandlerFunction = fn(Request) -> Response;
-const CRLF: &str = "\r\n";
 
 pub struct App {
     handlers: HashMap<(HTTPMethod, String), HandlerFunction>,
+}
+
+fn parse_headers(headers_vec: Vec<String>) -> HashMap<String, String> {
+    let mut headers = HashMap::new();
+    let header_re = Regex::new(r"(?<key>[a-zA-Z-_]+):\s?(?<value>.+)").unwrap();
+
+    for line in headers_vec.into_iter() {
+        let rm = header_re.captures(line.as_str()).unwrap();
+        headers.insert(rm["key"].into(), rm["value"].into());
+    }
+
+    headers
 }
 
 impl App {
@@ -22,8 +33,12 @@ impl App {
         }
     }
 
-    pub fn route(&mut self, method: HTTPMethod, path: &str, callback: HandlerFunction) {
-        self.handlers.insert((method, path.to_owned()), callback);
+    pub fn route<H: Sized>(&mut self, method: H, path: &str, callback: HandlerFunction)
+    where
+        H: Into<HTTPMethod>,
+    {
+        self.handlers
+            .insert((method.into(), path.to_owned()), callback);
     }
 
     pub fn get(&mut self, path: &str, callback: HandlerFunction) {
@@ -59,25 +74,29 @@ impl App {
             return;
         }
 
+        // Main header
         let request_v = http_request[0].split(' ').collect::<Vec<&str>>();
-
-        let method = HTTPMethod::from(request_v[0].to_string());
         let path = request_v[1].to_string();
+        let method = HTTPMethod::from(request_v[0].to_string());
+
+        let headers = parse_headers(http_request[1..].to_vec());
 
         let request = Request {
-            headers: Vec::new(), // TODO
+            headers,
             path: path.clone(),
             method: method.clone(),
         };
 
-        let handler = self.handlers.get(&(method, path)).unwrap();
-        let response = Response::from(handler(request));
-        let response_content = response.content;
-        let headers_string = [response.headers, vec![String::from("Content-Type: ") + &response.content_type]].concat().join(CRLF);
-        let status = 200;
-        let status_text = "OK";
-        let full_response_text = format!("HTTP/1.1 {status} {status_text}{CRLF}{headers_string}{CRLF}{CRLF}{response_content}");
+        let handler_option: Option<&HandlerFunction> = self.handlers.get(&(method, path));
 
-        stream.write_all(full_response_text.as_bytes()).unwrap();
+        let response: Response;
+
+        if let Some(handler) = handler_option {
+            response = Response::from(handler(request));
+        } else {
+            response = Response::not_found();
+        }
+
+        stream.write_all(response.build().as_slice()).unwrap();
     }
 }

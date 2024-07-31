@@ -1,4 +1,4 @@
-#[derive(Eq, Hash, PartialEq, Clone)]
+#[derive(Eq, Hash, PartialEq, Clone, Debug)]
 pub enum HTTPMethod {
     GET,
     POST,
@@ -10,7 +10,13 @@ pub enum HTTPMethod {
 
 impl From<String> for HTTPMethod {
     fn from(value: String) -> Self {
-        match value.as_str() {
+        value.as_str().into()
+    }
+}
+
+impl From<&str> for HTTPMethod {
+    fn from(value: &str) -> Self {
+        match value.to_uppercase().as_str() {
             "GET" => HTTPMethod::GET,
             "POST" => HTTPMethod::POST,
             "PUT" => HTTPMethod::PUT,

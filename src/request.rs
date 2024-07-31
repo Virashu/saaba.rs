@@ -1,7 +1,9 @@
 use crate::HTTPMethod;
+use std::collections::HashMap;
 
+#[derive(Debug)]
 pub struct Request {
-    pub headers: Vec<String>,
+    pub headers: HashMap<String, String>,
     pub path: String,
     pub method: HTTPMethod,
 }
@@ -9,7 +11,7 @@ pub struct Request {
 impl Request {
     pub fn new() -> Self {
         Request {
-            headers: Vec::new(),
+            headers: HashMap::new(),
             path: String::from(""),
             method: HTTPMethod::GET,
         }
