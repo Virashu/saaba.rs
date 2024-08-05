@@ -39,16 +39,17 @@ impl App {
         method: HTTPMethodLike,
         path: &str,
         callback: HandlerFunction,
-    ) {
+    ) -> &mut Self {
         self.handlers
             .insert((method.into(), path.to_owned()), callback);
+        self
     }
 
-    pub fn get(&mut self, path: &str, callback: HandlerFunction) {
+    pub fn get(&mut self, path: &str, callback: HandlerFunction) -> &mut Self {
         self.route(HTTPMethod::GET, path, callback)
     }
 
-    pub fn post(&mut self, path: &str, callback: HandlerFunction) {
+    pub fn post(&mut self, path: &str, callback: HandlerFunction) -> &mut Self {
         self.route(HTTPMethod::POST, path, callback)
     }
 

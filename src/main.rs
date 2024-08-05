@@ -1,5 +1,5 @@
 use colog;
-use saaba::{App, HTTPMethod, Response};
+use saaba::{App, Response};
 
 fn main() {
     colog::default_builder()
@@ -8,7 +8,6 @@ fn main() {
 
     let mut app = App::new();
 
-    #[allow(unused_variables)]
     app.route("get", "/", |req| {
         let req_addr = req.headers.get("Host").unwrap();
         let url = req.path;
@@ -21,8 +20,7 @@ fn main() {
         Response::html(content)
     });
 
-    #[allow(unused_variables)]
-    app.route(HTTPMethod::GET, "/favicon.ico", |req| {
+    app.get("/favicon.ico", |_| {
         let mut res = Response::file("__static/favicon.ico");
         res.set_header("Content-Type", "image/x-icon");
 
