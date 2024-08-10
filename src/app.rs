@@ -1,55 +1,60 @@
-use super::{HTTPMethod, Request, Response};
-use log::debug;
-use regex::Regex;
-use std::collections::HashMap;
 use std::{
+    collections::HashMap,
     io::{prelude::*, BufReader},
     net::{TcpListener, TcpStream},
 };
 
-// type ResponseValue = impl Into<Response>;
+use log::debug;
 
-type HandlerFunction = fn(Request) -> Response;
+use super::utils::parse_headers;
+use super::{HTTPMethod, Request, Response};
 
 pub struct App {
-    handlers: HashMap<(HTTPMethod, String), HandlerFunction>,
-}
-
-fn parse_headers(headers_vec: Vec<String>) -> HashMap<String, String> {
-    let mut headers = HashMap::new();
-    let header_re = Regex::new(r"(?<key>[a-zA-Z-_]+):\s?(?<value>.+)").unwrap();
-
-    for line in headers_vec.into_iter() {
-        let rm = header_re.captures(line.as_str()).unwrap();
-        headers.insert(rm["key"].into(), rm["value"].into());
-    }
-
-    headers
+    handlers: HashMap<(HTTPMethod, String), Box<dyn Fn(Request) -> Response + 'static>>,
 }
 
 impl App {
-    pub fn new() -> App {
-        App {
+    pub fn new() -> Self {
+        Self {
             handlers: HashMap::new(),
         }
     }
 
-    pub fn route<HTTPMethodLike: Into<HTTPMethod>>(
+    pub fn route<HTTPMethodLike, HandlerFunctionLike>(
         &mut self,
         method: HTTPMethodLike,
         path: &str,
-        callback: HandlerFunction,
-    ) -> &mut Self {
+        callback: HandlerFunctionLike,
+    ) -> &mut Self
+    where
+        HTTPMethodLike: Into<HTTPMethod>,
+        HandlerFunctionLike: Fn(Request) -> Response + 'static,
+    {
+        let boxed_cb = Box::new(callback);
         self.handlers
-            .insert((method.into(), path.to_owned()), callback);
+            .insert((method.into(), path.to_owned()), boxed_cb);
         self
     }
 
-    pub fn get(&mut self, path: &str, callback: HandlerFunction) -> &mut Self {
+    pub fn get<HandlerFunctionLike>(
+        &mut self,
+        path: &str,
+        callback: HandlerFunctionLike,
+    ) -> &mut Self
+    where
+        HandlerFunctionLike: Fn(Request) -> Response + 'static,
+    {
         self.route(HTTPMethod::GET, path, callback)
     }
 
-    pub fn post(&mut self, path: &str, callback: HandlerFunction) -> &mut Self {
+    pub fn post<HandlerFunctionLike>(
+        &mut self,
+        path: &str,
+        callback: HandlerFunctionLike,
+    ) -> &mut Self
+    where
+        HandlerFunctionLike: Fn(Request) -> Response + 'static,
+    {
         self.route(HTTPMethod::POST, path, callback)
     }
 
@@ -72,8 +77,6 @@ impl App {
             .take_while(|line| !line.is_empty())
             .collect();
 
-        // debug!("Request: {http_request:#?}");
-
         if http_request.len() == 0 {
             return;
         }
@@ -93,12 +96,12 @@ impl App {
 
         debug!("Request: {request:#?}");
 
-        let handler_option: Option<&HandlerFunction> = self.handlers.get(&(method, path));
+        let handler_option: Option<&Box<dyn Fn(Request) -> Response>> = self.handlers.get(&(method, path));
 
         let response: Response;
 
-        if let Some(handler) = handler_option {
-            response = Response::from(handler(request));
+        if let Some(boxed_handler_ref) = handler_option {
+            response = Response::from((**boxed_handler_ref)(request));
         } else {
             response = Response::not_found();
         }
