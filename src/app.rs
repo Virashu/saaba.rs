@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{prelude::*, BufReader},
+    io::{self, prelude::*, BufReader},
     net::{TcpListener, TcpStream},
 };
 
@@ -58,15 +58,17 @@ impl App {
         self.route(HTTPMethod::POST, path, callback)
     }
 
-    pub fn run(&mut self, hostname: &str, port: u32) {
+    pub fn run(&mut self, hostname: &str, port: u32) -> Result<(), io::Error> {
         let addr = format!("{hostname}:{port}");
-        let listener = TcpListener::bind(addr).unwrap();
+        let listener = TcpListener::bind(addr)?;
 
         for stream in listener.incoming() {
-            let stream = stream.unwrap();
+            let stream = stream?;
 
             self.handle_connection(stream);
         }
+
+        Ok(())
     }
 
     fn handle_connection(&mut self, mut stream: TcpStream) {
