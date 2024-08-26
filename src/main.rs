@@ -17,15 +17,13 @@ fn main() {
             Client address: <code>{req_addr}</code><br>\
             Request URL: <code>{url}</code>"
         );
+
         Response::html(content)
     });
 
     app.get("/favicon.ico", |_| {
-        let mut res = Response::file("__static/favicon.ico");
-        res.set_header("Content-Type", "image/x-icon");
-
-        res
+        Response::file("__static/favicon.ico").with_header("Content-Type", "image/x-icon")
     });
 
-    app.run("0.0.0.0", 3333)
+    app.run("0.0.0.0", 3333).unwrap();
 }

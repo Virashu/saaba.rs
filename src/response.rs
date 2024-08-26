@@ -26,10 +26,7 @@ impl Response {
         }
     }
 
-    pub fn not_found() -> Self {
-        Response::from_status(404)
-    }
-
+    /* From */
     pub fn from_status(status: u32) -> Self {
         Response {
             status,
@@ -70,6 +67,12 @@ impl Response {
         res
     }
 
+    /* Quick responses */
+    pub fn not_found() -> Self {
+        Response::from_status(404)
+    }
+
+    /* Set */
     pub fn set_content(&mut self, content: Vec<u8>) {
         self.headers
             .insert("Content-Length".into(), content.len().to_string());
@@ -84,6 +87,27 @@ impl Response {
         self.headers.insert(key.into(), value.into());
     }
 
+    /* Inline set */
+    pub fn with_header<StringLike: Into<String>>(
+        mut self,
+        key: StringLike,
+        value: StringLike,
+    ) -> Self {
+        self.set_header(key, value);
+        self
+    }
+
+    pub fn with_status(mut self, status: u32) -> Self {
+        self.set_status(status);
+        self
+    }
+
+    pub fn with_content(mut self, content: Vec<u8>) -> Self {
+        self.set_content(content);
+        self
+    }
+
+    /* Build */
     pub fn build(self) -> Vec<u8> {
         let headers_string = self
             .headers
