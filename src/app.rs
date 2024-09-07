@@ -1,29 +1,42 @@
 use std::{
     collections::HashMap,
+    fs,
     io::{self, prelude::*, BufReader},
     net::{TcpListener, TcpStream},
+    path::Path,
 };
 
 use log::debug;
 
+use crate::mime::guess_mime;
+
+use super::header::Header;
 use super::utils::parse_headers;
 use super::{HTTPMethod, Request, Response};
 
+type HandlerKey = (HTTPMethod, String);
+type ExactHandler = Box<dyn Fn(Request) -> Response + 'static>;
+type VarHandler = Box<dyn Fn(Request, HashMap<&str, &str>) -> Response + 'static>;
+
 pub struct App {
-    handlers: HashMap<(HTTPMethod, String), Box<dyn Fn(Request) -> Response + 'static>>,
+    exact_handlers: HashMap<HandlerKey, ExactHandler>,
+    var_handlers: HashMap<HandlerKey, VarHandler>,
+    static_handlers: HashMap<String, String>,
 }
 
 impl App {
     pub fn new() -> Self {
         Self {
-            handlers: HashMap::new(),
+            exact_handlers: HashMap::new(),
+            var_handlers: HashMap::new(),
+            static_handlers: HashMap::new(),
         }
     }
 
     pub fn route<HTTPMethodLike, HandlerFunctionLike>(
         &mut self,
         method: HTTPMethodLike,
-        path: &str,
+        url: &str,
         callback: HandlerFunctionLike,
     ) -> &mut Self
     where
@@ -31,31 +44,57 @@ impl App {
         HandlerFunctionLike: Fn(Request) -> Response + 'static,
     {
         let boxed_cb = Box::new(callback);
-        self.handlers
-            .insert((method.into(), path.to_owned()), boxed_cb);
+        let key: (HTTPMethod, String) = (method.into(), url.to_owned());
+
+        self.exact_handlers.insert(key, boxed_cb);
+
+        self
+    }
+
+    pub fn route_var<HTTPMethodLike, VarHandlerFunctionLike>(
+        &mut self,
+        method: HTTPMethodLike,
+        url: &str,
+        callback: VarHandlerFunctionLike,
+    ) -> &mut Self
+    where
+        HTTPMethodLike: Into<HTTPMethod>,
+        VarHandlerFunctionLike: Fn(Request, HashMap<&str, &str>) -> Response + 'static,
+    {
+        let boxed_cb = Box::new(callback);
+        let key: (HTTPMethod, String) = (method.into(), url.to_owned());
+
+        self.var_handlers.insert(key, boxed_cb);
+
         self
     }
 
     pub fn get<HandlerFunctionLike>(
         &mut self,
-        path: &str,
+        url: &str,
         callback: HandlerFunctionLike,
     ) -> &mut Self
     where
         HandlerFunctionLike: Fn(Request) -> Response + 'static,
     {
-        self.route(HTTPMethod::GET, path, callback)
+        self.route(HTTPMethod::GET, url, callback)
     }
 
     pub fn post<HandlerFunctionLike>(
         &mut self,
-        path: &str,
+        url: &str,
         callback: HandlerFunctionLike,
     ) -> &mut Self
     where
         HandlerFunctionLike: Fn(Request) -> Response + 'static,
     {
-        self.route(HTTPMethod::POST, path, callback)
+        self.route(HTTPMethod::POST, url, callback)
+    }
+
+    pub fn static_(&mut self, url: &str, dest: &str) -> &mut Self {
+        self.static_handlers
+            .insert(url.to_string(), dest.to_string());
+        self
     }
 
     pub fn run(&mut self, hostname: &str, port: u32) -> Result<(), io::Error> {
@@ -69,6 +108,126 @@ impl App {
         }
 
         Ok(())
+    }
+
+    fn try_find_exact(&self, request: &Request) -> Option<Response> {
+        let method = request.method.clone();
+        let url = request.url.clone();
+
+        let handler_option: Option<&ExactHandler> = self.exact_handlers.get(&(method, url));
+
+        if let Some(boxed_handler_ref) = handler_option {
+            Some(Response::from((**boxed_handler_ref)(request.clone())))
+        } else {
+            None
+        }
+    }
+
+    fn try_find_var(&self, request: &Request) -> Option<Response> {
+        let url = request.url.clone();
+
+        let re_replacement = regex::Regex::new(r"\{(?<v>\w+)\}").unwrap();
+
+        for k in self.var_handlers.keys() {
+            let re_string_semi = &k.1; // semi regex expression
+            let re_string = re_replacement
+                .replace_all(&re_string_semi, r"(?<$v>\w+)")
+                .into_owned();
+
+            let re_url = regex::Regex::new(&re_string).unwrap();
+
+            if re_url.is_match(&url) {
+                debug!("Found var handler: {}", re_string_semi);
+
+                let cap = re_url.captures(&url).unwrap();
+
+                let vars: HashMap<&str, &str> = re_url
+                    .capture_names()
+                    .flatten()
+                    .filter_map(|n| Some((n, cap.name(n)?.as_str())))
+                    .collect();
+
+                let handler = self.var_handlers.get(k).unwrap();
+                let res = handler(request.clone(), vars);
+                return Some(res);
+            }
+        }
+        None
+    }
+
+    fn try_find_static(&self, request: &Request) -> Option<Response> {
+        let url = request.url.clone();
+        let keys = self.static_handlers.keys();
+
+        // Find keys for current path
+        let mut keys: Vec<&String> = keys.filter(|k| url.starts_with(*k)).collect();
+
+        if keys.len() == 0 {
+            return None;
+        }
+
+        // Decide which key is the most accurate (specific)
+        // `/app/home` > `/app`
+        keys.sort_by(|a, b| {
+            let matches_a: Vec<&str> = a.matches("/").collect();
+            let len_a = matches_a.len();
+
+            let matches_b: Vec<&str> = b.matches("/").collect();
+            let len_b = matches_b.len();
+
+            len_a.cmp(&len_b)
+        });
+
+        let selected = keys[0];
+
+        let dest_option: Option<&String> = self.static_handlers.get(selected);
+
+        if let Some(dest) = dest_option {
+            let file_path_string = url.replace(selected, dest);
+
+            debug!("Found static resource path: {}", file_path_string);
+
+            let file_path = Path::new(&file_path_string);
+
+            if !file_path.exists() {
+                return None;
+            }
+
+            return match fs::read(file_path) {
+                Ok(content) => {
+                    let type_ = guess_mime(&file_path_string);
+                    let mut res = Response::from_content_bytevec(content);
+
+                    match type_ {
+                        Some(t) => res.set_header(Header::ContentType, &t),
+                        None => {}
+                    }
+
+                    Some(res)
+                }
+                Err(_) => None,
+            };
+        }
+
+        None
+    }
+
+    fn find_response(&self, request: Request) -> Response {
+        debug!("Seeking for handler: {}", &request.url);
+
+        if let Some(response) = self.try_find_exact(&request) {
+            return response;
+        }
+
+        if let Some(response) = self.try_find_var(&request) {
+            return response;
+        }
+
+        if let Some(response) = self.try_find_static(&request) {
+            return response;
+        }
+
+        Response::not_found()
     }
 
     fn handle_connection(&mut self, mut stream: TcpStream) {
@@ -85,28 +244,20 @@ impl App {
 
         // Main header
         let request_v = http_request[0].split(' ').collect::<Vec<&str>>();
-        let path = request_v[1].to_string();
+        let url = request_v[1].to_string();
         let method = HTTPMethod::from(request_v[0].to_string());
 
         let headers = parse_headers(http_request[1..].to_vec());
 
         let request = Request {
             method: method.clone(),
-            path: path.clone(),
+            url: url.clone(),
             headers,
         };
 
         debug!("Request: {request:#?}");
 
-        let handler_option: Option<&Box<dyn Fn(Request) -> Response>> = self.handlers.get(&(method, path));
-
-        let response: Response;
-
-        if let Some(boxed_handler_ref) = handler_option {
-            response = Response::from((**boxed_handler_ref)(request));
-        } else {
-            response = Response::not_found();
-        }
+        let response = self.find_response(request);
 
         stream.write_all(response.build().as_slice()).unwrap();
     }

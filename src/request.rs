@@ -1,10 +1,10 @@
 use crate::HTTPMethod;
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Request {
     pub method: HTTPMethod,
-    pub path: String,
+    pub url: String,
     pub headers: HashMap<String, String>,
 }
 
@@ -12,7 +12,7 @@ impl Request {
     pub fn new() -> Self {
         Request {
             method: HTTPMethod::GET,
-            path: String::from(""),
+            url: String::from(""),
             headers: HashMap::new(),
         }
     }
