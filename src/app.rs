@@ -69,6 +69,8 @@ impl App {
         self
     }
 
+    // Shorthands
+
     pub fn get<HandlerFunctionLike>(
         &mut self,
         url: &str,
@@ -89,6 +91,28 @@ impl App {
         HandlerFunctionLike: Fn(Request) -> Response + 'static,
     {
         self.route(HTTPMethod::POST, url, callback)
+    }
+
+    pub fn get_var<VarHandlerFunctionLike>(
+        &mut self,
+        url: &str,
+        callback: VarHandlerFunctionLike,
+    ) -> &mut Self
+    where
+        VarHandlerFunctionLike: Fn(Request, HashMap<&str, &str>) -> Response + 'static,
+    {
+        self.route_var(HTTPMethod::GET, url, callback)
+    }
+
+    pub fn post_var<VarHandlerFunctionLike>(
+        &mut self,
+        url: &str,
+        callback: VarHandlerFunctionLike,
+    ) -> &mut Self
+    where
+        VarHandlerFunctionLike: Fn(Request, HashMap<&str, &str>) -> Response + 'static,
+    {
+        self.route_var(HTTPMethod::POST, url, callback)
     }
 
     pub fn static_(&mut self, url: &str, dest: &str) -> &mut Self {
@@ -116,8 +140,8 @@ impl App {
 
         let handler_option: Option<&ExactHandler> = self.exact_handlers.get(&(method, url));
 
-        if let Some(boxed_handler_ref) = handler_option {
-            Some(Response::from((**boxed_handler_ref)(request.clone())))
+        if let Some(handler) = handler_option {
+            Some(handler(request.clone()))
         } else {
             None
         }
@@ -184,50 +208,50 @@ impl App {
 
         if let Some(dest) = dest_option {
             let file_path_string = url.replace(selected, dest);
-
+            let file_path = Path::new(&file_path_string);
             debug!("Found static resource path: {}", file_path_string);
 
-            let file_path = Path::new(&file_path_string);
-
-            if !file_path.exists() {
-                return None;
+            if file_path.exists() {
+                return Self::try_read_file(file_path_string);
             }
 
-            return match fs::read(file_path) {
-                Ok(content) => {
-                    let type_ = guess_mime(&file_path_string);
-                    let mut res = Response::from_content_bytevec(content);
+            let file_path_string = file_path_string + "/index.html";
+            let file_path = Path::new(&file_path_string);
 
-                    match type_ {
-                        Some(t) => res.set_header(Header::ContentType, &t),
-                        None => {}
-                    }
-
-                    Some(res)
-                }
-                Err(_) => None,
-            };
+            if file_path.exists() {
+                return Self::try_read_file(file_path_string);
+            }
         }
 
         None
     }
 
+    fn try_read_file(file_path_string: String) -> Option<Response> {
+        let file_path = Path::new(&file_path_string);
+
+        return match fs::read(file_path) {
+            Ok(content) => {
+                let type_ = guess_mime(&file_path_string);
+                let mut res = Response::from_content_bytevec(content);
+
+                match type_ {
+                    Some(t) => res.set_header(Header::ContentType, &t),
+                    None => {}
+                }
+
+                Some(res)
+            }
+            Err(_) => None,
+        };
+    }
+
     fn find_response(&self, request: Request) -> Response {
         debug!("Seeking for handler: {}", &request.url);
 
-        if let Some(response) = self.try_find_exact(&request) {
-            return response;
-        }
-
-        if let Some(response) = self.try_find_var(&request) {
-            return response;
-        }
-
-        if let Some(response) = self.try_find_static(&request) {
-            return response;
-        }
-
-        Response::not_found()
+        self.try_find_exact(&request)
+            .or_else(|| self.try_find_var(&request))
+            .or_else(|| self.try_find_static(&request))
+            .unwrap_or(Response::not_found())
     }
 
     fn handle_connection(&mut self, mut stream: TcpStream) {
