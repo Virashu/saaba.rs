@@ -1,4 +1,5 @@
 use crate::constants::CRLF;
+use crate::header::Header;
 use std::collections::HashMap;
 use std::fs;
 
@@ -38,7 +39,7 @@ impl Response {
     pub fn from_content_string(content: String) -> Self {
         Response {
             status: 200,
-            headers: HashMap::from([("Content-Length".into(), content.len().to_string())]),
+            headers: HashMap::from([(Header::ContentLength.into(), content.len().to_string())]),
             content: content.into(),
         }
     }
@@ -46,7 +47,7 @@ impl Response {
     pub fn from_content_bytevec(content: Vec<u8>) -> Self {
         Response {
             status: 200,
-            headers: HashMap::from([("Content-Length".into(), content.len().to_string())]),
+            headers: HashMap::from([(Header::ContentLength.into(), content.len().to_string())]),
             content,
         }
     }
@@ -62,9 +63,7 @@ impl Response {
     }
 
     pub fn html<StringLike: Into<String>>(content: StringLike) -> Self {
-        let mut res = Response::from_content_string(content.into());
-        res.set_header("Content-Type", "text/html");
-        res
+        Response::from_content_string(content.into()).with_header(Header::ContentType, "text/html")
     }
 
     /* Quick responses */
@@ -74,8 +73,7 @@ impl Response {
 
     /* Set */
     pub fn set_content(&mut self, content: Vec<u8>) {
-        self.headers
-            .insert("Content-Length".into(), content.len().to_string());
+        self.set_header(Header::ContentLength, &content.len().to_string());
         self.content = content;
     }
 
