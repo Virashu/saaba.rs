@@ -16,7 +16,7 @@ fn ext_to_mime(ext: &str) -> &str {
         "jpeg" => "image/jpeg",
         "jfif" => "image/jpeg",
         "png" => "image/png",
-        "svg" => "image/svg",
+        "svg" => "image/svg+xml",
         "webp" => "image/webp",
 
         // video
