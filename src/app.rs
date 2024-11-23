@@ -208,7 +208,7 @@ impl App {
             let matches_b: Vec<&str> = b.matches("/").collect();
             let len_b = matches_b.len();
 
-            len_a.cmp(&len_b)
+            len_b.cmp(&len_a)
         });
 
         let selected = keys[0];
