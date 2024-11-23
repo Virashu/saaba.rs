@@ -207,19 +207,29 @@ impl App {
         let dest_option: Option<&String> = self.static_handlers.get(selected);
 
         if let Some(dest) = dest_option {
-            let file_path_string = url.replace(selected, dest);
-            let file_path = Path::new(&file_path_string);
-            debug!("Found static resource path: {}", file_path_string);
+            let resource_path_string = url.replace(selected, dest);
+            let resource_path = Path::new(&resource_path_string);
+            debug!("Found static resource path: {}", resource_path_string);
 
-            if file_path.exists() {
-                return Self::try_read_file(file_path_string);
+            if !resource_path.exists() {
+                return None;
             }
 
-            let file_path_string = file_path_string + "/index.html";
-            let file_path = Path::new(&file_path_string);
+            if resource_path.exists() && resource_path.is_file() {
+                return Self::try_read_file(resource_path_string);
+            }
 
-            if file_path.exists() {
-                return Self::try_read_file(file_path_string);
+            if resource_path.is_dir() {
+                if !resource_path_string.ends_with("/") {
+                    return Some(Response::redirect(request.url.clone() + "/"));
+                }
+
+                let resource_index_string = resource_path_string.clone() + "/index.html";
+                let resource_index_path = Path::new(&resource_index_string);
+
+                if resource_index_path.exists() && resource_index_path.is_file() {
+                    return Self::try_read_file(resource_index_string);
+                }
             }
         }
 
@@ -227,6 +237,8 @@ impl App {
     }
 
     fn try_read_file(file_path_string: String) -> Option<Response> {
+        //! file_path_string: path of **existing** file
+
         let file_path = Path::new(&file_path_string);
 
         return match fs::read(file_path) {

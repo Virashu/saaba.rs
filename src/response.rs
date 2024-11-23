@@ -62,13 +62,17 @@ impl Response {
         }
     }
 
-    pub fn html<StringLike: Into<String>>(content: StringLike) -> Self {
+    pub fn html(content: impl Into<String>) -> Self {
         Response::from_content_string(content.into()).with_header(Header::ContentType, "text/html")
     }
 
     /* Quick responses */
     pub fn not_found() -> Self {
         Response::from_status(404)
+    }
+
+    pub fn redirect(url: impl Into<String>) -> Self {
+        Response::from_status(307).with_header("Location", url)
     }
 
     /* Set */
@@ -81,16 +85,12 @@ impl Response {
         self.status = status;
     }
 
-    pub fn set_header<StringLike: Into<String>>(&mut self, key: StringLike, value: StringLike) {
+    pub fn set_header(&mut self, key: impl Into<String>, value: impl Into<String>) {
         self.headers.insert(key.into(), value.into());
     }
 
     /* Inline set */
-    pub fn with_header<StringLike: Into<String>>(
-        mut self,
-        key: StringLike,
-        value: StringLike,
-    ) -> Self {
+    pub fn with_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.set_header(key, value);
         self
     }
