@@ -216,7 +216,7 @@ impl App {
         let dest_option: Option<&String> = self.static_handlers.get(selected);
 
         if let Some(dest) = dest_option {
-            let resource_path_string = url.replace(selected, dest);
+            let resource_path_string = url.replacen(selected, dest, 1);
             let resource_path = Path::new(&resource_path_string);
             debug!("Found static resource path: {}", resource_path_string);
 
