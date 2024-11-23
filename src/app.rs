@@ -116,7 +116,15 @@ impl App {
     }
 
     pub fn static_(&mut self, url: &str, dest: &str) -> &mut Self {
-        let url_ = format!("/{}/", url.to_string().trim_matches('/'));
+        let mut url_ = url.to_string();
+
+        if !url_.starts_with('/') {
+            url_ = format!("/{url}");
+        }
+
+        if !url_.ends_with('/') {
+            url_ = format!("{url}/")
+        }
 
         self.static_handlers.insert(url_, dest.to_string());
         self
