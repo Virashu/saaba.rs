@@ -77,7 +77,7 @@ impl Response {
 
     /* Set */
     pub fn set_content(&mut self, content: Vec<u8>) {
-        self.set_header(Header::ContentLength, &content.len().to_string());
+        self.set_header(Header::ContentLength, content.len().to_string());
         self.content = content;
     }
 
@@ -123,9 +123,15 @@ impl Response {
         )
         .into_bytes();
 
-        let full_response_text = [response_headers, self.content].concat();
+        
+        // Full response text
+        [response_headers, self.content].concat()
+    }
+}
 
-        full_response_text
+impl Default for Response {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

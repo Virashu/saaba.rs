@@ -1,4 +1,3 @@
-use colog;
 use saaba::{App, HTTPMethod, Response};
 
 const STATIC_DIR: &str = "./examples/simple_server/__static";

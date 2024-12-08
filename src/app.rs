@@ -149,11 +149,7 @@ impl App {
 
         let handler_option: Option<&ExactHandler> = self.exact_handlers.get(&(method, url));
 
-        if let Some(handler) = handler_option {
-            Some(handler(request.clone()))
-        } else {
-            None
-        }
+        handler_option.map(|handler| handler(request.clone()))
     }
 
     fn try_find_var(&self, request: &Request) -> Option<Response> {
@@ -164,7 +160,7 @@ impl App {
         for k in self.var_handlers.keys() {
             let re_string_semi = &k.1; // semi regex expression
             let re_string = re_replacement
-                .replace_all(&re_string_semi, r"(?<$v>\w+)")
+                .replace_all(re_string_semi, r"(?<$v>\w+)")
                 .into_owned();
 
             let re_url = regex::Regex::new(&re_string).unwrap();
@@ -195,7 +191,7 @@ impl App {
         // Find keys for current path
         let mut keys: Vec<&String> = keys.filter(|k| url.starts_with(*k)).collect();
 
-        if keys.len() == 0 {
+        if keys.is_empty() {
             return None;
         }
 
@@ -250,20 +246,19 @@ impl App {
 
         let file_path = Path::new(&file_path_string);
 
-        return match fs::read(file_path) {
+        match fs::read(file_path) {
             Ok(content) => {
                 let type_ = guess_mime(&file_path_string);
                 let mut res = Response::from_content_bytevec(content);
 
-                match type_ {
-                    Some(t) => res.set_header(Header::ContentType, &t),
-                    None => {}
+                if let Some(t) = type_ {
+                    res.set_header(Header::ContentType, &t)
                 }
 
                 Some(res)
             }
             Err(_) => None,
-        };
+        }
     }
 
     fn find_response(&self, request: Request) -> Response {
@@ -283,7 +278,7 @@ impl App {
             .take_while(|line| !line.is_empty())
             .collect();
 
-        if http_request.len() == 0 {
+        if http_request.is_empty() {
             return;
         }
 
@@ -305,5 +300,11 @@ impl App {
         let response = self.find_response(request);
 
         stream.write_all(response.build().as_slice()).unwrap();
+    }
+}
+
+impl Default for App {
+    fn default() -> Self {
+        App::new()
     }
 }
