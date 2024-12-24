@@ -6,8 +6,6 @@ use std::{
     path::Path,
 };
 
-use log::debug;
-
 use crate::mime::guess_mime;
 
 use super::header::Header;
@@ -122,15 +120,17 @@ impl App {
             url_ = format!("/{url}");
         }
 
-        if !url_.ends_with('/') {
-            url_ = format!("{url}/")
-        }
+        // if !url_.ends_with('/') {
+        //     url_ = format!("{url}/")
+        // }
+
+        url_ = url_.trim_end_matches('/').to_string();
 
         self.static_handlers.insert(url_, dest.to_string());
         self
     }
 
-    pub fn run(&mut self, hostname: &str, port: u32) -> Result<(), io::Error> {
+    pub fn run(&self, hostname: &str, port: u32) -> Result<(), io::Error> {
         let addr = format!("{hostname}:{port}");
         let listener = TcpListener::bind(addr)?;
 
@@ -166,7 +166,7 @@ impl App {
             let re_url = regex::Regex::new(&re_string).unwrap();
 
             if re_url.is_match(&url) {
-                debug!("Found var handler: {}", re_string_semi);
+                log::debug!("Found var handler: {}", re_string_semi);
 
                 let cap = re_url.captures(&url).unwrap();
 
@@ -184,12 +184,31 @@ impl App {
         None
     }
 
+    fn url_starts_with(url: String, key: String) -> bool {
+        let url_seg = url.split("/").collect::<Vec<_>>();
+        let key_seg = key.split("/").collect::<Vec<_>>();
+        url_seg.starts_with(&key_seg)
+    }
+
+    fn similarity(url: String, key: String) -> i32 {
+        let url_seg = url.split("/");
+        let key_seg = key.split("/");
+
+        url_seg
+            .zip(key_seg)
+            .take_while(|(u, k)| u == k)
+            .collect::<Vec<_>>()
+            .len() as i32
+    }
+
     fn try_find_static(&self, request: &Request) -> Option<Response> {
         let url = request.url.clone();
         let keys = self.static_handlers.keys();
 
         // Find keys for current path
-        let mut keys: Vec<&String> = keys.filter(|k| url.starts_with(*k)).collect();
+        let mut keys: Vec<&String> = keys
+            .filter(|k| Self::url_starts_with(url.clone(), k.to_string()))
+            .collect();
 
         if keys.is_empty() {
             return None;
@@ -197,15 +216,17 @@ impl App {
 
         // Decide which key is the most accurate (specific)
         // `/app/home` > `/app`
-        keys.sort_by(|a, b| {
-            let matches_a: Vec<&str> = a.matches("/").collect();
-            let len_a = matches_a.len();
+        // keys.sort_by(|a, b| {
+        //     let matches_a: Vec<&str> = a.matches("/").collect();
+        //     let len_a = matches_a.len();
 
-            let matches_b: Vec<&str> = b.matches("/").collect();
-            let len_b = matches_b.len();
+        //     let matches_b: Vec<&str> = b.matches("/").collect();
+        //     let len_b = matches_b.len();
 
-            len_b.cmp(&len_a)
-        });
+        //     len_b.cmp(&len_a)
+        // });
+
+        keys.sort_by_key(|k| Self::similarity(url.to_string(), k.to_string()));
 
         let selected = keys[0];
 
@@ -214,22 +235,23 @@ impl App {
         if let Some(dest) = dest_option {
             let resource_path_string = url.replacen(selected, dest, 1);
             let resource_path = Path::new(&resource_path_string);
-            debug!("Found static resource path: {}", resource_path_string);
+            log::debug!("Found static resource path: {}", resource_path_string);
 
             if !resource_path.exists() {
                 return None;
             }
 
-            if resource_path.exists() && resource_path.is_file() {
+            if resource_path.is_file() {
                 return Self::try_read_file(resource_path_string);
             }
 
             if resource_path.is_dir() {
                 if !resource_path_string.ends_with("/") {
+                    log::debug!("Adding a slash to `{}` as it is a path", request.url);
                     return Some(Response::redirect(request.url.clone() + "/"));
                 }
 
-                let resource_index_string = resource_path_string.clone() + "/index.html";
+                let resource_index_string = resource_path_string.clone() + "index.html";
                 let resource_index_path = Path::new(&resource_index_string);
 
                 if resource_index_path.exists() && resource_index_path.is_file() {
@@ -262,7 +284,7 @@ impl App {
     }
 
     fn find_response(&self, request: Request) -> Response {
-        debug!("Seeking for handler: {}", &request.url);
+        log::debug!("Seeking for handler: {}", &request.url);
 
         self.try_find_exact(&request)
             .or_else(|| self.try_find_var(&request))
@@ -270,7 +292,7 @@ impl App {
             .unwrap_or(Response::not_found())
     }
 
-    fn handle_connection(&mut self, mut stream: TcpStream) {
+    fn handle_connection(&self, mut stream: TcpStream) {
         let buf_reader = BufReader::new(&mut stream);
         let http_request: Vec<String> = buf_reader
             .lines()
@@ -295,7 +317,7 @@ impl App {
             headers,
         };
 
-        debug!("Request: {request:#?}");
+        // log::debug!("Request: {request:#?}");
 
         let response = self.find_response(request);
 

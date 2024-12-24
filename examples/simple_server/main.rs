@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use saaba::{App, HTTPMethod, Response};
 
 const STATIC_DIR: &str = "./examples/simple_server/__static";
@@ -27,8 +29,8 @@ fn main() {
         Response::file(&favicon).with_header("Content-Type", "image/x-icon")
     });
 
-    app.route_var(HTTPMethod::GET, "/var/{variable}", |_, v| {
-        let var = v.get("variable").unwrap_or(&"not set");
+    app.route_var(HTTPMethod::GET, "/var/{variable}", |_, variables: HashMap<&str, &str>| {
+        let var = variables.get("variable").unwrap_or(&"not set");
 
         let content = format!(
             "Hello, world!<br>\
