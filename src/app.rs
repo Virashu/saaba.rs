@@ -116,15 +116,11 @@ impl App {
     pub fn static_(&mut self, url: &str, dest: &str) -> &mut Self {
         let mut url_ = url.to_string();
 
-        if !url_.starts_with('/') {
-            url_ = format!("/{url}");
-        }
-
-        // if !url_.ends_with('/') {
-        //     url_ = format!("{url}/")
-        // }
-
         url_ = url_.trim_end_matches('/').to_string();
+
+        if !url_.starts_with('/') {
+            url_ = format!("/{url_}");
+        }
 
         self.static_handlers.insert(url_, dest.to_string());
         self
@@ -187,7 +183,7 @@ impl App {
     fn url_starts_with(url: String, key: String) -> bool {
         let url_seg = url.split("/").collect::<Vec<_>>();
         let key_seg = key.split("/").collect::<Vec<_>>();
-        url_seg.starts_with(&key_seg)
+        url_seg.starts_with(&key_seg) || key == "/"
     }
 
     fn similarity(url: String, key: String) -> i32 {
@@ -202,7 +198,7 @@ impl App {
     }
 
     fn try_find_static(&self, request: &Request) -> Option<Response> {
-        let url = request.url.clone();
+        let mut url = request.url.clone();
         let keys = self.static_handlers.keys();
 
         // Find keys for current path
@@ -228,14 +224,22 @@ impl App {
 
         keys.sort_by_key(|k| Self::similarity(url.to_string(), k.to_string()));
 
-        let selected = keys[0];
+        let selected = keys.last().unwrap().to_string();
 
-        let dest_option: Option<&String> = self.static_handlers.get(selected);
+        if selected == "/" {
+            url.insert(0, '/');
+        }
+
+        let dest_option: Option<&String> = self.static_handlers.get(&selected);
 
         if let Some(dest) = dest_option {
-            let resource_path_string = url.replacen(selected, dest, 1);
+            let resource_path_string = url.replacen(&selected, dest, 1);
             let resource_path = Path::new(&resource_path_string);
-            log::debug!("Found static resource path: {}", resource_path_string);
+            log::debug!(
+                "Found static resource path `{}` on handler `{}`",
+                resource_path_string,
+                selected
+            );
 
             if !resource_path.exists() {
                 return None;
@@ -279,7 +283,10 @@ impl App {
 
                 Some(res)
             }
-            Err(_) => None,
+            Err(_) => {
+                log::error!("Cannot read file `{}`", file_path_string);
+                None
+            }
         }
     }
 
