@@ -62,8 +62,8 @@ css text/css
 csv text/csv
 htm text/html
 html text/html
-tif text/html
-tiff text/htmlts video/mp2t
+tif image/tiff
+tiff image/tiff
 js text/javascript
 mjs text/javascript
 txt text/plain
