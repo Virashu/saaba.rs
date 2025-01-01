@@ -1,59 +1,97 @@
-#[derive(Debug)]
-pub enum ResponseCode {
-    OK = 200,
-    MovedPermanently = 301,
-    TemporaryRedirect = 307,
-    PermanentRedirect = 308,
-    BadRequest = 400,
-    Unauthorized = 401,
-    PaymentRequired = 402,
-    Forbidden = 403,
-    NotFound = 404,
-    InternalServerError = 500,
+macro_rules! auto_try_from__u32 {
+    ($(#[$meta:meta])* $vis:vis enum $name:ident {
+        $($(#[$vmeta:meta])* $vname:ident $(= $val:expr)?,)*
+    }) => {
+        $(#[$meta])*
+        $vis enum $name {
+            $($(#[$vmeta])* $vname $(= $val)?,)*
+        }
+
+        impl std::convert::TryFrom<u32> for $name {
+            type Error = ();
+
+            fn try_from(v: u32) -> Result<Self, Self::Error> {
+                match v {
+                    $(x if x == $name::$vname as u32 => Ok($name::$vname),)*
+                    _ => Err(()),
+                }
+            }
+        }
+    }
+}
+
+auto_try_from__u32! {
+    #[derive(Debug)]
+    pub enum ResponseCode {
+        // 200
+        OK = 200,
+        Created,
+        Accepted,
+        NonAuthoritativeInformation,
+        NoContent,
+        ResetContent,
+        PartialContent,
+        MultiStatus,
+        AlreadyReported,
+        IMUsed = 226,
+
+        // 300
+        MultipleChoices = 300,
+        MovedPermanently,
+        Found,
+        SeeOther,
+        NotModified,
+        TemporaryRedirect = 307,
+        PermanentRedirect = 308,
+
+        // 400
+        BadRequest = 400,
+        Unauthorized,
+        PaymentRequired,
+        Forbidden,
+        NotFound,
+        MethodNotAllowed,
+        NotAcceptable,
+        ProxyAuthenticationRequired,
+        RequestTimeout,
+        Conflict,
+        Gone,
+        LengthRequired,
+        PreconditionFailed,
+        ContentTooLarge,
+        URITooLong,
+        UnsupportedMediaType,
+        RangeNotSatisfiable,
+        ExpectationFailed,
+        ImATeapot,
+        MisdirectedRequest = 421,
+        UnprocessableContent,
+        Locked,
+        FailedDependency,
+        TooEarly,
+        UpgradeRequired,
+        PreconditionRequired = 428,
+        TooManyRequests,
+        RequestHeaderFieldsTooLarge = 431,
+        UnavailableForLegalReasons = 451,
+
+        // 500
+        InternalServerError = 500,
+        NotImplemented,
+        BadGateway,
+        ServiceUnavailable,
+        GatewayTimeout,
+        HTTPVersionNotSupported,
+        VariantAlsoNegotiates,
+        InsufficientStorage,
+        LoopDetected,
+        NotExtended = 510,
+        NetworkAuthenticationRequired,
+    }
 }
 
 impl From<ResponseCode> for u32 {
     fn from(value: ResponseCode) -> Self {
         value as u32
-    }
-}
-
-impl TryFrom<u32> for ResponseCode {
-    type Error = ();
-
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
-        match value {
-            200 => Ok(Self::OK),
-            301 => Ok(Self::MovedPermanently),
-            307 => Ok(Self::TemporaryRedirect),
-            308 => Ok(Self::PermanentRedirect),
-            400 => Ok(Self::BadRequest),
-            401 => Ok(Self::Unauthorized),
-            402 => Ok(Self::PaymentRequired),
-            403 => Ok(Self::Forbidden),
-            404 => Ok(Self::NotFound),
-            500 => Ok(Self::InternalServerError),
-
-            _ => Err(()),
-        }
-    }
-}
-
-impl std::fmt::Display for ResponseCode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            Self::OK => "OK",
-            Self::MovedPermanently => "Moved Permanently",
-            Self::TemporaryRedirect => "Temporary Redirect",
-            Self::PermanentRedirect => "Permanent Redirect",
-            Self::BadRequest => "Bad Request",
-            Self::Unauthorized => "Unauthorized",
-            Self::PaymentRequired => "Payment Required",
-            Self::Forbidden => "Forbidden",
-            Self::NotFound => "Not Found",
-            Self::InternalServerError => "Internal Server Error",
-        };
-
-        write!(f, "{}", s)
     }
 }

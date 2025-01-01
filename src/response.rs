@@ -109,7 +109,7 @@ impl Response {
             .join(CRLF);
 
         let status = self.status;
-        let status_text = ResponseCode::try_from(status).map_or(String::new(), |r| r.to_string());
+        let status_text = ResponseCode::try_from(status).map_or(String::new(), |r| format!("{:?}", r));
 
         let response_headers = format!(
             "HTTP/1.1 {} {}{CRLF}{}{CRLF}{CRLF}",
