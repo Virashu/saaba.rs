@@ -106,7 +106,7 @@ pub fn guess_mime(filename: &str) -> Option<String> {
 
         return match mime {
             "" => None,
-            m => Some(m.to_string()),
+            mime_type => Some(mime_type.to_string()),
         };
     }
 

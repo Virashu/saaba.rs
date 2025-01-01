@@ -1,16 +1,9 @@
 use crate::constants::CRLF;
 use crate::header::Header;
+use crate::utils::construct_message;
+use crate::ResponseCode;
 use std::collections::HashMap;
 use std::fs;
-
-fn get_status_text(status: u32) -> String {
-    match status {
-        200 => String::from("OK"),
-        404 => String::from("Not Found"),
-        500 => String::from("Internal Server Error"),
-        _ => String::from(""),
-    }
-}
 
 pub struct Response {
     pub status: u32,
@@ -21,16 +14,16 @@ pub struct Response {
 impl Response {
     pub fn new() -> Self {
         Response {
-            status: 200,
+            status: ResponseCode::OK.into(),
             headers: HashMap::new(),
             content: Vec::new(),
         }
     }
 
     /* From */
-    pub fn from_status(status: u32) -> Self {
+    pub fn from_status<StatusLike: Into<u32>>(status: StatusLike) -> Self {
         Response {
-            status,
+            status: status.into(),
             headers: HashMap::new(),
             content: Vec::new(),
         }
@@ -38,7 +31,7 @@ impl Response {
 
     pub fn from_content_string(content: String) -> Self {
         Response {
-            status: 200,
+            status: ResponseCode::OK.into(),
             headers: HashMap::from([(Header::ContentLength.into(), content.len().to_string())]),
             content: content.into(),
         }
@@ -46,7 +39,7 @@ impl Response {
 
     pub fn from_content_bytevec(content: Vec<u8>) -> Self {
         Response {
-            status: 200,
+            status: ResponseCode::OK.into(),
             headers: HashMap::from([(Header::ContentLength.into(), content.len().to_string())]),
             content,
         }
@@ -58,7 +51,7 @@ impl Response {
         if let Ok(content) = content_wrapped {
             Response::from_content_bytevec(content)
         } else {
-            Response::from_status(500)
+            Response::from_status(ResponseCode::InternalServerError)
         }
     }
 
@@ -68,11 +61,12 @@ impl Response {
 
     /* Quick responses */
     pub fn not_found() -> Self {
-        Response::from_status(404)
+        let message = construct_message(format!("{:?}", ResponseCode::NotFound));
+        Response::from_status(ResponseCode::NotFound).with_content(message.into_bytes())
     }
 
     pub fn redirect(url: impl Into<String>) -> Self {
-        Response::from_status(307).with_header("Location", url)
+        Response::from_status(ResponseCode::TemporaryRedirect).with_header(Header::Location, url)
     }
 
     /* Set */
@@ -90,8 +84,8 @@ impl Response {
     }
 
     /* Inline set */
-    pub fn with_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.set_header(key, value);
+    pub fn with_content(mut self, content: Vec<u8>) -> Self {
+        self.set_content(content);
         self
     }
 
@@ -100,8 +94,8 @@ impl Response {
         self
     }
 
-    pub fn with_content(mut self, content: Vec<u8>) -> Self {
-        self.set_content(content);
+    pub fn with_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.set_header(key, value);
         self
     }
 
@@ -115,7 +109,7 @@ impl Response {
             .join(CRLF);
 
         let status = self.status;
-        let status_text = get_status_text(status);
+        let status_text = ResponseCode::try_from(status).map_or(String::new(), |r| r.to_string());
 
         let response_headers = format!(
             "HTTP/1.1 {} {}{CRLF}{}{CRLF}{CRLF}",
@@ -123,7 +117,6 @@ impl Response {
         )
         .into_bytes();
 
-        
         // Full response text
         [response_headers, self.content].concat()
     }

@@ -42,5 +42,5 @@ fn main() {
 
     app.static_("/static", STATIC_DIR);
 
-    app.run("0.0.0.0", 80).unwrap();
+    app.run("0.0.0.0", 80).expect("Error");
 }

@@ -38,11 +38,17 @@ impl App {
         callback: HandlerFunctionLike,
     ) -> &mut Self
     where
-        HTTPMethodLike: Into<HTTPMethod>,
+        HTTPMethodLike: TryInto<HTTPMethod> + std::fmt::Debug,
         HandlerFunctionLike: Fn(Request) -> Response + 'static,
+        <HTTPMethodLike as TryInto<HTTPMethod>>::Error: std::fmt::Display,
     {
         let boxed_cb = Box::new(callback);
-        let key: (HTTPMethod, String) = (method.into(), url.to_owned());
+        let http_method: HTTPMethod = method
+            .try_into()
+            .inspect_err(|e| log::error!("{}", e))
+            .unwrap_or_default();
+
+        let key: (HTTPMethod, String) = (http_method, url.to_owned());
 
         self.exact_handlers.insert(key, boxed_cb);
 
@@ -140,7 +146,7 @@ impl App {
     }
 
     fn try_find_exact(&self, request: &Request) -> Option<Response> {
-        let method = request.method.clone();
+        let method = request.method;
         let url = request.url.clone();
 
         let handler_option: Option<&ExactHandler> = self.exact_handlers.get(&(method, url));
@@ -190,11 +196,7 @@ impl App {
         let url_seg = url.split("/");
         let key_seg = key.split("/");
 
-        url_seg
-            .zip(key_seg)
-            .take_while(|(u, k)| u == k)
-            .collect::<Vec<_>>()
-            .len() as i32
+        url_seg.zip(key_seg).take_while(|(u, k)| u == k).count() as i32
     }
 
     fn try_find_static(&self, request: &Request) -> Option<Response> {
@@ -209,18 +211,6 @@ impl App {
         if keys.is_empty() {
             return None;
         }
-
-        // Decide which key is the most accurate (specific)
-        // `/app/home` > `/app`
-        // keys.sort_by(|a, b| {
-        //     let matches_a: Vec<&str> = a.matches("/").collect();
-        //     let len_a = matches_a.len();
-
-        //     let matches_b: Vec<&str> = b.matches("/").collect();
-        //     let len_b = matches_b.len();
-
-        //     len_b.cmp(&len_a)
-        // });
 
         keys.sort_by_key(|k| Self::similarity(url.to_string(), k.to_string()));
 
@@ -314,17 +304,22 @@ impl App {
         // Main header
         let request_v = http_request[0].split(' ').collect::<Vec<&str>>();
         let url = request_v[1].to_string();
-        let method = HTTPMethod::from(request_v[0].to_string());
+
+        let method_str = request_v[0];
+
+        let method = HTTPMethod::try_from(method_str)
+            .inspect_err(|e| log::error!("{}", e))
+            .unwrap_or_default();
 
         let headers = parse_headers(http_request[1..].to_vec());
 
         let request = Request {
-            method: method.clone(),
+            method,
             url: url.clone(),
             headers,
         };
 
-        // log::debug!("Request: {request:#?}");
+        log::debug!("Request: {request:#?}");
 
         let response = self.find_response(request);
 

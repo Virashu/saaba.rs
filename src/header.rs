@@ -2,4 +2,5 @@
 pub mod Header {
     pub const ContentType: &str = "Content-Type";
     pub const ContentLength: &str = "Content-Length";
+    pub const Location: &str = "Location";
 }
